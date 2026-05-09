@@ -624,6 +624,100 @@ I_PAIRS.forEach(p=>{
 let vPriceChart=null, vEquityChart=null;
 let iPriceChart=null, iEquityChart=null;
 let vLogLines=[], iLogLines=[];
+
+// ══════════════════════════════════════════════════════════
+// ── FIREBASE SYNC ENGINE ──────────────────────────────────
+// ══════════════════════════════════════════════════════════
+const FB = {
+  url: null,
+  enabled: false,
+  lastPush: 0,
+  pushInterval: 3000,
+
+  init(url) {
+    if(!url) return;
+    this.url = url.replace(/\/+$/, '');
+    this.enabled = true;
+    vLog('[FIREBASE] Connected — syncing to iPad every 3s', 'ok');
+    iLog('[FIREBASE] Connected — syncing to iPad every 3s', 'ok');
+  },
+
+  async push(path, data) {
+    if(!this.enabled || !this.url) return;
+    try {
+      await fetch(`${this.url}/${path}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } catch(e) { /* silent fail */ }
+  },
+
+  pushState() {
+    if(!this.enabled) return;
+    const now = Date.now();
+    if(now - this.lastPush < this.pushInterval) return;
+    this.lastPush = now;
+
+    const vSig = vComputeSignals(V.selected) || {};
+    const iSig = iComputeSignals(I.selected) || {};
+
+    this.push('state', {
+      vaultbot: {
+        portfolio: parseFloat(V.portfolio.toFixed(2)),
+        totalPnl: parseFloat(V.totalPnl.toFixed(2)),
+        wins: V.wins, losses: V.losses,
+        tradeCount: V.tradeCount,
+        running: V.running,
+        equityCurve: V.equityCurve,
+        recentTrades: V.trades.slice(-20),
+        activeTrade: V.activeTrade,
+        prices: V.prices,
+        sentimentScore: V.sentimentScore,
+        macroScore: V.macroScore,
+        wmGeoScore: V.wmGeoScore,
+        milestonesFired: V.milestonesFired,
+        signalDecision: vSig.decision || 'WAIT',
+        signalConf: vSig.conf || 0,
+        signalQuality: vSig.quality || '—',
+        longScore: vSig.longScore || 0,
+        shortScore: vSig.shortScore || 0,
+        news: V.news ? V.news.slice(0,6) : [],
+      },
+      ictbot: {
+        portfolio: parseFloat(I.portfolio.toFixed(2)),
+        totalPnl: parseFloat(I.totalPnl.toFixed(2)),
+        wins: I.wins, losses: I.losses,
+        dayTradeCount: I.dayTradeCount,
+        swingCount: I.swingCount,
+        running: I.running,
+        equityCurve: I.equityCurve,
+        recentTrades: I.trades.slice(-20),
+        activeTrade: I.activeTrade,
+        swingTrades: I.swingTrades,
+        prices: I.prices,
+        activeKZ: I.activeKZ,
+        amdPhase: I.amdPhase,
+        htfBias: I.htfBias,
+        setupScore: I.setupScore,
+        sweepDetected: I.sweepDetected,
+        mssDetected: I.mssDetected,
+        inOTE: I.inOTE,
+        milestonesFired: I.milestonesFired,
+        signalDecision: iSig.direction || 'WAIT',
+        signalConf: iSig.conf || 0,
+        signalQuality: iSig.quality || '—',
+      },
+      combined: {
+        totalPortfolio: parseFloat((V.portfolio + I.portfolio).toFixed(2)),
+        totalPnl: parseFloat((V.totalPnl + I.totalPnl).toFixed(2)),
+        totalTrades: V.tradeCount + I.dayTradeCount + I.swingCount,
+        lastUpdate: now,
+      }
+    });
+  }
+};
+
 const KEYS={};
 
 // ══════════════════════════════════════════════════════════
@@ -763,6 +857,7 @@ function vCheckExit(){
     updateVEquityChart();
     updateVTradelog();
     if(vPriceChart) initVPriceChart();
+    FB.pushState();
   }
 }
 
@@ -1049,6 +1144,7 @@ function iCheckExit(){
     updateIActivePos();
     updateIEquityChart();
     updateITradelog();
+    FB.pushState();
   }
 }
 
@@ -1093,6 +1189,7 @@ function iCheckMilestones(){
 // ── PRICE TICKS ───────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
 function vTickPrices(){
+  FB.pushState();
   V_PAIRS.forEach(p=>{
     const drift=(Math.random()-.49)*V_VOL[p];
     V.prices[p]=parseFloat((V.prices[p]*(1+drift)).toFixed(p==='BTC/USDT'?1:2));
@@ -1541,6 +1638,9 @@ function fmtI(p,pair){return parseFloat(p).toFixed(I_DECIMALS[pair]||2);}
 function openModal(){document.getElementById('modalOverlay').classList.add('open');}
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
 function saveKeys(){
+  const fbUrl = document.getElementById('key-firebase').value.trim();
+  if(fbUrl) { FB.init(fbUrl); FB.url=fbUrl; FB.enabled=true; }
+  KEYS.firebase = fbUrl;
   KEYS.anthropic=document.getElementById('key-anthropic').value.trim();
   KEYS.wm=document.getElementById('key-wm').value.trim();
   KEYS.firebase=document.getElementById('key-firebase').value.trim();
@@ -1557,6 +1657,10 @@ function loadKeys(){
   try{
     const k=JSON.parse(localStorage.getItem('hq_keys')||'{}');
     Object.assign(KEYS,k);
+    if(k.firebase) {
+      document.getElementById('key-firebase').value=k.firebase;
+      FB.init(k.firebase);
+    }
     if(k.anthropic) document.getElementById('key-anthropic').value=k.anthropic;
     if(k.wm) document.getElementById('key-wm').value=k.wm;
     if(k.firebase) document.getElementById('key-firebase').value=k.firebase;
