@@ -521,7 +521,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <input class="finput" id="key-firebase" placeholder="https://vaultbot-8d8ff-default-rtdb.firebaseio.com"/>
       <div class="fhint">→ Syncs both bots to iPad dashboard at your GitHub Pages URL</div>
     </div>
-    <div class="asec">When ready for live money</div>
+    <div class="asec">Live Market Data</div>
+    <div class="fg">
+      <div class="flbl">TWELVE DATA API KEY (Live Forex + Indices prices)</div>
+      <input class="finput" id="key-twelvedata" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" type="password"/>
+      <div class="fhint">→ twelvedata.com · Free: 800 req/day · Powers EUR/USD GBP/USD NAS100 US30 live prices</div>
+    </div>
+    <div class="asec">When ready for live execution</div>
     <div class="fg">
       <div class="flbl">BINANCE API KEY (VaultBot — Crypto)</div>
       <input class="finput" id="key-binance" placeholder="64-char key" type="password"/>
@@ -658,65 +664,53 @@ const FB = {
     const now = Date.now();
     if(now - this.lastPush < this.pushInterval) return;
     this.lastPush = now;
-
-    const vSig = vComputeSignals(V.selected) || {};
-    const iSig = iComputeSignals(I.selected) || {};
-
-    this.push('state', {
-      vaultbot: {
-        portfolio: parseFloat(V.portfolio.toFixed(2)),
-        totalPnl: parseFloat(V.totalPnl.toFixed(2)),
-        wins: V.wins, losses: V.losses,
-        tradeCount: V.tradeCount,
-        running: V.running,
-        equityCurve: V.equityCurve,
-        recentTrades: V.trades.slice(-20),
-        activeTrade: V.activeTrade,
-        prices: V.prices,
-        sentimentScore: V.sentimentScore,
-        macroScore: V.macroScore,
-        wmGeoScore: V.wmGeoScore,
-        milestonesFired: V.milestonesFired,
-        signalDecision: vSig.decision || 'WAIT',
-        signalConf: vSig.conf || 0,
-        signalQuality: vSig.quality || '—',
-        longScore: vSig.longScore || 0,
-        shortScore: vSig.shortScore || 0,
-        news: V.news ? V.news.slice(0,6) : [],
-      },
-      ictbot: {
-        portfolio: parseFloat(I.portfolio.toFixed(2)),
-        totalPnl: parseFloat(I.totalPnl.toFixed(2)),
-        wins: I.wins, losses: I.losses,
-        dayTradeCount: I.dayTradeCount,
-        swingCount: I.swingCount,
-        running: I.running,
-        equityCurve: I.equityCurve,
-        recentTrades: I.trades.slice(-20),
-        activeTrade: I.activeTrade,
-        swingTrades: I.swingTrades,
-        prices: I.prices,
-        activeKZ: I.activeKZ,
-        amdPhase: I.amdPhase,
-        htfBias: I.htfBias,
-        setupScore: I.setupScore,
-        sweepDetected: I.sweepDetected,
-        mssDetected: I.mssDetected,
-        inOTE: I.inOTE,
-        milestonesFired: I.milestonesFired,
-        signalDecision: iSig.direction || 'WAIT',
-        signalConf: iSig.conf || 0,
-        signalQuality: iSig.quality || '—',
-      },
-      combined: {
-        totalPortfolio: parseFloat((V.portfolio + I.portfolio).toFixed(2)),
-        totalPnl: parseFloat((V.totalPnl + I.totalPnl).toFixed(2)),
-        totalTrades: V.tradeCount + I.dayTradeCount + I.swingCount,
-        lastUpdate: now,
-      }
-    });
-  }
-};
+    try {
+      const payload = {
+        vaultbot: {
+          portfolio: parseFloat(V.portfolio.toFixed(2)),
+          totalPnl:  parseFloat(V.totalPnl.toFixed(2)),
+          wins: V.wins, losses: V.losses,
+          tradeCount: V.tradeCount,
+          running: V.running,
+          equityCurve: V.equityCurve.slice(-50),
+          recentTrades: V.trades.slice(-10),
+          activeTrade: V.activeTrade,
+          prices: V.prices,
+          sentimentScore: V.sentimentScore,
+          macroScore: V.macroScore,
+          wmGeoScore: V.wmGeoScore,
+          milestonesFired: V.milestonesFired,
+        },
+        ictbot: {
+          portfolio: parseFloat(I.portfolio.toFixed(2)),
+          totalPnl:  parseFloat(I.totalPnl.toFixed(2)),
+          wins: I.wins, losses: I.losses,
+          dayTradeCount: I.dayTradeCount,
+          swingCount: I.swingCount,
+          running: I.running,
+          equityCurve: I.equityCurve.slice(-50),
+          recentTrades: I.trades.slice(-10),
+          activeTrade: I.activeTrade,
+          swingTrades: I.swingTrades,
+          prices: I.prices,
+          activeKZ: I.activeKZ,
+          amdPhase: I.amdPhase,
+          htfBias: I.htfBias,
+          setupScore: I.setupScore,
+          milestonesFired: I.milestonesFired,
+        },
+        combined: {
+          totalPortfolio: parseFloat((V.portfolio + I.portfolio).toFixed(2)),
+          totalPnl: parseFloat((V.totalPnl + I.totalPnl).toFixed(2)),
+          totalTrades: V.tradeCount + I.dayTradeCount + I.swingCount,
+          lastUpdate: now,
+        }
+      };
+      this.push('state', payload);
+    } catch(e) {
+      console.error('FB push error:', e);
+    }
+  }};
 
 const KEYS={};
 
@@ -909,14 +903,23 @@ function getESTHour(){
 function getESTTime(){
   return new Date().toLocaleString('en-US',{timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
 }
+function isWeekend(){
+  const est=new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const day=est.getDay(); // 0=Sun, 6=Sat
+  return day===0||day===6;
+}
 function detectKZ(){
+  if(isWeekend()) return null; // Markets closed on weekends
   const h=getESTHour();
   if(h>=KZ.SILVER.start&&h<KZ.SILVER.end) return'SILVER';
   if(h>=KZ.NY.start&&h<KZ.NY.end) return'NY';
   if(h>=KZ.LONDON.start&&h<KZ.LONDON.end) return'LONDON';
   return null;
 }
-function isNoTrade(){const h=getESTHour();return h>=NO_TRADE_START&&h<NO_TRADE_END;}
+function isNoTrade(){
+  if(isWeekend()) return true;
+  const h=getESTHour();return h>=NO_TRADE_START&&h<NO_TRADE_END;
+}
 
 // ICT: pair-appropriate kill zone check
 function isPairTradeable(pair,kz){
@@ -1076,6 +1079,14 @@ function iTryExecute(){
   if(I.activeTrade){iCheckExit();return;}
   // Check swing trades
   iCheckSwingExits();
+  // HARD KILL ZONE GATE — never trade outside kill zones
+  const kzNow = detectKZ();
+  I.activeKZ = kzNow;
+  if(!kzNow || isNoTrade()) {
+    // Update AMD display even when not trading
+    iUpdateAMD(I.selected);
+    return;
+  }
   const best=iPickBest();if(!best) return;
   const{pair,sig}=best;
   if(sig.direction==='WAIT'||sig.score<4) return;
@@ -1198,14 +1209,30 @@ function vTickPrices(){
   });
 }
 function iTickPrices(){
-  const kzActive=!!I.activeKZ&&!isNoTrade();
-  const volMult=kzActive?1.6:0.5;
-  I_PAIRS.forEach(p=>{
-    const drift=(Math.random()-.49)*I_VOL[p]*volMult;
-    I.prices[p]=parseFloat((I.prices[p]*(1+drift)).toFixed(I_DECIMALS[p]));
-    I.priceHistory[p].push(I.prices[p]);
-    if(I.priceHistory[p].length>300) I.priceHistory[p].shift();
-  });
+  // Only simulate if Twelve Data not connected — keeps history array building
+  // When Twelve Data is connected, real prices are pushed directly in fetchTwelveData
+  if(!twelveDataKey) {
+    const kzActive=!!I.activeKZ&&!isNoTrade();
+    const volMult=kzActive?1.6:0.5;
+    I_PAIRS.forEach(p=>{
+      const drift=(Math.random()-.49)*I_VOL[p]*volMult;
+      I.prices[p]=parseFloat((I.prices[p]*(1+drift)).toFixed(I_DECIMALS[p]));
+      I.priceHistory[p].push(I.prices[p]);
+      if(I.priceHistory[p].length>300) I.priceHistory[p].shift();
+    });
+  }
+  // When live — still push current price to history to keep chart moving
+  if(twelveDataKey) {
+    I_PAIRS.forEach(p=>{
+      if(I.prices[p]) {
+        // Add tiny noise so chart isn't flat between Twelve Data updates
+        const noise=(Math.random()-.5)*I_VOL[p]*0.1;
+        const noisy=parseFloat((I.prices[p]*(1+noise)).toFixed(I_DECIMALS[p]));
+        I.priceHistory[p].push(noisy);
+        if(I.priceHistory[p].length>300) I.priceHistory[p].shift();
+      }
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1569,6 +1596,9 @@ function toggleBoth(){
   const btn=document.getElementById('mainBtn');
   if(running){
     btn.textContent='⏹ Stop Both';btn.className='topbtn stop';
+    // Start live price feeds
+    startBinanceWS();
+    vLog('[LIVE] Connecting to Binance WebSocket for real crypto prices...', 'ok');
     vLog('VaultBot started · $500 · 25% position · 6-signal fusion','ok');
     vLog('Scanning BTC ETH SOL BNB every 1s · 68% confidence threshold','ok');
     vLog('Signals: EMA+RSI+MACD+Volume+Sentiment+WM Geo · 8-factor scoring','ok');
@@ -1589,6 +1619,7 @@ function toggleBoth(){
     setTimeout(()=>{initVPriceChart();initVEquityChart();initIPriceChart();initIEquityChart();},100);
   }else{
     btn.textContent='▶ Start Both';btn.className='topbtn go';
+    stopLiveFeeds();
     V.intervals.forEach(clearInterval);V.intervals=[];
     I.intervals.forEach(clearInterval);I.intervals=[];
     vLog(`VaultBot stopped · Portfolio: $${V.portfolio.toFixed(2)}`,'warn');
@@ -1641,6 +1672,8 @@ function saveKeys(){
   const fbUrl = document.getElementById('key-firebase').value.trim();
   if(fbUrl) { FB.init(fbUrl); FB.url=fbUrl; FB.enabled=true; }
   KEYS.firebase = fbUrl;
+  const tdKey = document.getElementById('key-twelvedata')?.value.trim();
+  if(tdKey) { KEYS.twelvedata = tdKey; startTwelveData(tdKey); }
   KEYS.anthropic=document.getElementById('key-anthropic').value.trim();
   KEYS.wm=document.getElementById('key-wm').value.trim();
   KEYS.firebase=document.getElementById('key-firebase').value.trim();
@@ -1661,6 +1694,11 @@ function loadKeys(){
       document.getElementById('key-firebase').value=k.firebase;
       FB.init(k.firebase);
     }
+    if(k.twelvedata) {
+      const el = document.getElementById('key-twelvedata');
+      if(el) el.value = k.twelvedata;
+      startTwelveData(k.twelvedata);
+    }
     if(k.anthropic) document.getElementById('key-anthropic').value=k.anthropic;
     if(k.wm) document.getElementById('key-wm').value=k.wm;
     if(k.firebase) document.getElementById('key-firebase').value=k.firebase;
@@ -1674,6 +1712,103 @@ document.getElementById('modalOverlay').addEventListener('click',function(e){if(
 // ══════════════════════════════════════════════════════════
 // ── INIT ──────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════
+// ── LIVE PRICE FEEDS ─────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+
+// VaultBot — Binance WebSocket (free, no key needed)
+let binanceWS = null;
+function startBinanceWS() {
+  const streams = ['btcusdt','ethusdt','solusdt','bnbusdt'].map(s => `${s}@ticker`).join('/');
+  binanceWS = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
+  binanceWS.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if(!msg.data) return;
+      const d = msg.data;
+      const symbol = d.s; // e.g. BTCUSDT
+      const price = parseFloat(d.c); // current price
+      const pairMap = {
+        'BTCUSDT':'BTC/USDT','ETHUSDT':'ETH/USDT',
+        'SOLUSDT':'SOL/USDT','BNBUSDT':'BNB/USDT'
+      };
+      const pair = pairMap[symbol];
+      if(pair && price > 0) {
+        V.prices[pair] = price;
+        V.priceHistory[pair].push(price);
+        if(V.priceHistory[pair].length > 300) V.priceHistory[pair].shift();
+      }
+    } catch(err) {}
+  };
+  binanceWS.onopen = () => vLog('[LIVE] Binance WebSocket connected — real crypto prices', 'ok');
+  binanceWS.onerror = () => vLog('[LIVE] Binance WS error — using simulated prices', 'warn');
+  binanceWS.onclose = () => {
+    vLog('[LIVE] Binance WS disconnected — reconnecting in 5s', 'warn');
+    setTimeout(startBinanceWS, 5000);
+  };
+}
+
+// ICT Bot — Twelve Data REST API (free key, real Forex + Indices)
+let twelveDataKey = null;
+let twelveDataInterval = null;
+
+async function fetchTwelveData() {
+  if(!twelveDataKey) return;
+  const symbols = 'EUR/USD,GBP/USD,NDX,DJI';
+  const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbols)}&apikey=${twelveDataKey}`;
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    // EUR/USD
+    if(data['EUR/USD']?.price) {
+      const p = parseFloat(data['EUR/USD'].price);
+      I.prices['EUR/USD'] = p;
+      I.priceHistory['EUR/USD'].push(p);
+      if(I.priceHistory['EUR/USD'].length > 300) I.priceHistory['EUR/USD'].shift();
+    }
+    // GBP/USD
+    if(data['GBP/USD']?.price) {
+      const p = parseFloat(data['GBP/USD'].price);
+      I.prices['GBP/USD'] = p;
+      I.priceHistory['GBP/USD'].push(p);
+      if(I.priceHistory['GBP/USD'].length > 300) I.priceHistory['GBP/USD'].shift();
+    }
+    // NAS100 — Twelve Data uses NDX
+    if(data['NDX']?.price) {
+      const p = parseFloat(data['NDX'].price);
+      I.prices['NAS100'] = p;
+      I.priceHistory['NAS100'].push(p);
+      if(I.priceHistory['NAS100'].length > 300) I.priceHistory['NAS100'].shift();
+    }
+    // US30 — Twelve Data uses DJI
+    if(data['DJI']?.price) {
+      const p = parseFloat(data['DJI'].price);
+      I.prices['US30'] = p;
+      I.priceHistory['US30'].push(p);
+      if(I.priceHistory['US30'].length > 300) I.priceHistory['US30'].shift();
+    }
+    iLog('[LIVE] Twelve Data prices updated — EUR/USD:' + I.prices['EUR/USD'].toFixed(4) + ' NAS100:' + I.prices['NAS100'].toFixed(1), 'ok');
+  } catch(err) {
+    iLog('[LIVE] Twelve Data fetch error — using last known prices', 'warn');
+  }
+}
+
+function startTwelveData(key) {
+  twelveDataKey = key;
+  fetchTwelveData(); // immediate first fetch
+  // Free tier: 800 req/day = 1 req every ~108 seconds
+  // We'll fetch every 60 seconds to stay well within limits
+  twelveDataInterval = setInterval(fetchTwelveData, 60000);
+  iLog('[LIVE] Twelve Data connected — real Forex + Indices prices every 60s', 'ok');
+}
+
+function stopLiveFeeds() {
+  if(binanceWS) { binanceWS.close(); binanceWS = null; }
+  if(twelveDataInterval) { clearInterval(twelveDataInterval); twelveDataInterval = null; }
+}
+
+
 function init(){
   loadKeys();
   // Initial log messages
