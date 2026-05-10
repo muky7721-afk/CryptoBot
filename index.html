@@ -286,7 +286,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <div class="bs"><div class="bs-lbl">PORTFOLIO</div><div class="bs-val g" id="vPort">$500.00</div><div class="bs-sub" id="vPortSub">+$0.00 (0%)</div></div>
     <div class="bs"><div class="bs-lbl">WIN RATE</div><div class="bs-val b" id="vWR">—</div><div class="bs-sub" id="vWRSub">0W / 0L</div></div>
     <div class="bs"><div class="bs-lbl">TRADES</div><div class="bs-val" id="vTC">0</div><div class="bs-sub">reinvesting all</div></div>
-    <div class="bs"><div class="bs-lbl">POSITION SIZE</div><div class="bs-val a" id="vPosSize">$125</div><div class="bs-sub">25% of port</div></div>
+    <div class="bs"><div class="bs-lbl">POSITION SIZE</div><div class="bs-val a" id="vPosSize">$125</div><div class="bs-sub">35% of port</div></div>
     <div class="bs"><div class="bs-lbl">SIGNAL</div><div class="bs-val" id="vSignalTop" style="font-size:14px">WAIT</div><div class="bs-sub" id="vConfTop">0% conf</div></div>
   </div>
   <div class="bot-body">
@@ -323,7 +323,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
     <!-- Signal fusion -->
     <div class="card">
       <div class="chdr">
-        <div class="ctitle">SIGNAL FUSION — 6 SIGNALS</div>
+        <div class="ctitle">SIGNAL FUSION — 8 FACTORS · 6/8 TO TRADE</div>
         <span class="badge info" id="vConfBadge">0% conf</span>
       </div>
       <div class="sig-row"><div><div class="sig-name">EMA Cross (9/21 + 50 trend)</div><div class="sig-desc">Fast above slow + price above EMA50</div></div><div class="badge wait" id="vs-ema">IDLE</div></div>
@@ -333,7 +333,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div class="sig-row"><div><div class="sig-name">News Sentiment</div><div class="sig-desc">WM + AI scored: <span id="vs-sent-val">—</span>/100</div></div><div class="badge wait" id="vs-sent">IDLE</div></div>
       <div class="sig-row"><div><div class="sig-name">WM Geo + Macro</div><div class="sig-desc">Geopolitical risk score: <span id="vs-wm-val">—</span>/100</div></div><div class="badge wait" id="vs-wm">IDLE</div></div>
       <div class="sig-row" style="background:var(--vault3);border-radius:7px;padding:8px;margin-top:4px;border:1px solid rgba(0,214,143,.12)">
-        <div><div class="sig-name" style="color:var(--vault)">Decision (need 6/8)</div><div class="sig-desc">Long: <span id="vs-long-score">0</span>/8 · Short: <span id="vs-short-score">0</span>/8</div></div>
+        <div><div class="sig-name" style="color:var(--vault)">Decision (6/8 required)</div><div class="sig-desc">Long: <span id="vs-long-score">0</span>/8 · Short: <span id="vs-short-score">0</span>/8</div></div>
         <div class="badge wait" id="vs-final">WAIT</div>
       </div>
     </div>
@@ -619,7 +619,7 @@ const HEADLINES=[
 // ── Init price histories ─────────────────────────────────
 V_PAIRS.forEach(p=>{
   V.priceHistory[p]=[];
-  for(let i=0;i<120;i++){const v=V.prices[p]*(1+(Math.random()-.5)*.014);V.priceHistory[p].push(parseFloat(v.toFixed(p==='BTC/USDT'?1:2)));V.prices[p]=V.priceHistory[p][V.priceHistory[p].length-1];}
+  for(let i=0;i<120;i++){const v=V.prices[p]*(1+(Math.random()-.5)*.014);V.priceHistory[p].push(parseFloat(v.toFixed(2)));V.prices[p]=parseFloat(V.priceHistory[p][V.priceHistory[p].length-1].toFixed(2));}
 });
 I_PAIRS.forEach(p=>{
   I.priceHistory[p]=[];
@@ -806,8 +806,8 @@ function vTryExecute(){
   if(sig.decision==='LONG'&&recentTrend<-.005) return;
   if(sig.decision==='SHORT'&&recentTrend>.005) return;
   const price=V.prices[pair];
-  // 25% position size
-  const size=V.portfolio*.25;
+  // 35% position size
+  const size=V.portfolio*.35;
   const dir=sig.decision;
   // SL: 0.8%, TP: 2.8% — keeps 3.5:1 R:R
   const sl=dir==='LONG'?price*.992:price*1.008;
@@ -843,7 +843,7 @@ function vCheckExit(){
     if(pnl>0) V.wins++;else V.losses++;
     const reason=hitTP?'TP HIT':hitSL?(t.trailingActivated?'TRAIL SL':'SL HIT'):hardTimeout?'TIMEOUT':'PROFIT CLOSE';
     V.trades.push({pair:t.pair,dir:t.dir,entry:t.entry,exit:exitPrice,pnl,size:t.size,reason,quality:t.quality,conf:t.confidence,longScore:t.longScore,shortScore:t.shortScore});
-    V.equityCurve.push(V.portfolio);
+    V.equityCurve.push(parseFloat(V.portfolio.toFixed(2)));
     vCheckMilestones();
     vLog(`[TRADE] CLOSED ${t.dir} ${t.pair} · ${reason} · ${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}`,'trade');
     V.activeTrade=null;
@@ -1095,7 +1095,7 @@ function iTryExecute(){
   // Risk 1% of portfolio per trade — ICT rule
   const riskAmt=I.portfolio*.01;
   const slPct=pair==='EUR/USD'||pair==='GBP/USD'?0.0008:0.005;
-  const size=Math.min(riskAmt/slPct, I.portfolio*.25); // Max 25% position
+  const size=Math.min(riskAmt/slPct, I.portfolio*.25); // ICT: max 25% (1% risk rule)
   const dir=sig.direction;
   // SL: below/above sweep (ICT rule)
   const sl=dir==='LONG'?(I.asianLow||price*(1-slPct))*(1-.0001):(I.asianHigh||price*(1+slPct))*(1+.0001);
@@ -1146,7 +1146,7 @@ function iCheckExit(){
     if(pnl>0) I.wins++;else I.losses++;
     const reason=hitTP?'TP HIT':hitSL?(t.trailingActivated?'TRAIL SL':'SL HIT'):kzEnded?'KZ ENDED':hardTimeout?'TIMEOUT':'PROFIT CLOSE';
     I.trades.push({pair:t.pair,dir:t.dir,entry:t.entry,exit:exitPrice,pnl,size:t.size,reason,quality:t.quality,kz:t.kz,score:t.score,type:'DAY'});
-    I.equityCurve.push(I.portfolio);
+    I.equityCurve.push(parseFloat(I.portfolio.toFixed(2)));
     iCheckMilestones();
     // Reset ICT state
     I.sweepDetected=null;I.mssDetected=false;I.inOTE=false;I.fvgs=[];
@@ -1175,7 +1175,7 @@ function iCheckSwingExits(){
       if(pnl>0) I.wins++;else I.losses++;
       const reason=hitTP?'SWING TP':hitSL?'SWING SL':'SWING EXPIRED (3d)';
       I.trades.push({pair:t.pair,dir:t.dir,entry:t.entry,exit:exitPrice,pnl,size:t.size,reason,quality:'A+',kz:t.kz,type:'SWING'});
-      I.equityCurve.push(I.portfolio);
+      I.equityCurve.push(parseFloat(I.portfolio.toFixed(2)));
       iCheckMilestones();
       iLog(`[SWING] CLOSED ${t.dir} ${t.pair} · ${reason} · ${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}`,'swing');
       updateIEquityChart();
@@ -1203,8 +1203,8 @@ function vTickPrices(){
   FB.pushState();
   V_PAIRS.forEach(p=>{
     const drift=(Math.random()-.49)*V_VOL[p];
-    V.prices[p]=parseFloat((V.prices[p]*(1+drift)).toFixed(p==='BTC/USDT'?1:2));
-    V.priceHistory[p].push(V.prices[p]);
+    V.prices[p]=parseFloat((V.prices[p]*(1+drift)).toFixed(2));
+    V.priceHistory[p].push(parseFloat(V.prices[p].toFixed(2)));
     if(V.priceHistory[p].length>300) V.priceHistory[p].shift();
   });
 }
@@ -1244,10 +1244,10 @@ function updateVUI(){
   // Stats bar
   const pnlPct=((V.portfolio-500)/500*100).toFixed(2);
   const wr=(V.wins+V.losses)>0?Math.round(V.wins/(V.wins+V.losses)*100)+'%':'—';
-  setText('vPort',`$${V.portfolio.toFixed(2)}`);
-  setText('vPortSub',`${V.totalPnl>=0?'+':''}$${V.totalPnl.toFixed(2)} (${pnlPct}%)`);
+  setText('vPort',`$${parseFloat(V.portfolio).toFixed(2)}`);
+  setText('vPortSub',`${V.totalPnl>=0?'+':''}$${parseFloat(V.totalPnl).toFixed(2)} (${pnlPct}%)`);
   setText('vWR',wr);setText('vWRSub',`${V.wins}W / ${V.losses}L`);
-  setText('vTC',V.tradeCount);setText('vPosSize',`$${(V.portfolio*.25).toFixed(0)}`);
+  setText('vTC',V.tradeCount);setText('vPosSize',`$${(V.portfolio*.35).toFixed(0)}`);
   // Signal panel
   const sig=vComputeSignals(V.selected)||{};
   const set=(id,v,cls)=>{const el=document.getElementById(id);if(el){el.textContent=v;el.className='badge '+cls;}};
@@ -1299,7 +1299,7 @@ function updateVActivePos(){
   if(!V.activeTrade){el.innerHTML='<div class="empty">No open position<br>Scanning BTC ETH SOL BNB every 1s</div>';return;}
   const t=V.activeTrade;const price=V.prices[t.pair];
   const pnlPct=((price-t.entry)/t.entry*(t.dir==='LONG'?1:-1)*100).toFixed(2);
-  const pnlDollar=(t.size*parseFloat(pnlPct)/100).toFixed(2);
+  const pnlDollar=parseFloat((t.size*parseFloat(pnlPct)/100).toFixed(2));
   const isProfit=parseFloat(pnlPct)>=0;
   const barW=Math.min(100,Math.max(0,((parseFloat(pnlPct)+0.8)/3.6)*100)).toFixed(0);
   const elapsed=Math.round((Date.now()-t.openTime)/1000);
@@ -1344,8 +1344,8 @@ function updateIUI(){
   const kz=detectKZ();I.activeKZ=kz;
   const pnlPct=((I.portfolio-500)/500*100).toFixed(2);
   const wr=(I.wins+I.losses)>0?Math.round(I.wins/(I.wins+I.losses)*100)+'%':'—';
-  setText('iPort',`$${I.portfolio.toFixed(2)}`);
-  setText('iPortSub',`${I.totalPnl>=0?'+':''}$${I.totalPnl.toFixed(2)} (${pnlPct}%)`);
+  setText('iPort',`$${parseFloat(I.portfolio).toFixed(2)}`);
+  setText('iPortSub',`${I.totalPnl>=0?'+':''}$${parseFloat(I.totalPnl).toFixed(2)} (${pnlPct}%)`);
   setText('iWR',wr);setText('iWRSub',`${I.wins}W / ${I.losses}L`);
   setText('iDayTC',I.dayTradeCount);setText('iSwingTC',I.swingTrades.length);
   // Clock
@@ -1419,7 +1419,7 @@ function updateIActivePos(){
   if(I.activeTrade){
     const t=I.activeTrade;const price=I.prices[t.pair];const dec=I_DECIMALS[t.pair];
     const pnlPct=((price-t.entry)/t.entry*(t.dir==='LONG'?1:-1)*100).toFixed(3);
-    const pnlDollar=(t.size*parseFloat(pnlPct)/100).toFixed(2);
+    const pnlDollar=parseFloat((t.size*parseFloat(pnlPct)/100).toFixed(2));
     const isProfit=parseFloat(pnlPct)>=0;
     const barW=Math.min(100,Math.max(0,((parseFloat(pnlPct)+0.08)/0.36)*100)).toFixed(0);
     const elapsed=Math.round((Date.now()-t.openTime)/1000);
@@ -1451,7 +1451,7 @@ function updateISwingTrades(){
   el.innerHTML=I.swingTrades.map(t=>{
     const price=I.prices[t.pair];const dec=I_DECIMALS[t.pair];
     const pnlPct=((price-t.entry)/t.entry*(t.dir==='LONG'?1:-1)*100).toFixed(3);
-    const pnlDollar=(t.size*parseFloat(pnlPct)/100).toFixed(2);
+    const pnlDollar=parseFloat((t.size*parseFloat(pnlPct)/100).toFixed(2));
     const isProfit=parseFloat(pnlPct)>=0;
     const elapsed=Math.round((Date.now()-t.openTime)/3600000);
     return`<div style="padding:8px 0;border-bottom:1px solid var(--border)">
@@ -1515,8 +1515,8 @@ function updateTopBar(){
   const total=V.portfolio+I.portfolio;
   const totalPnl=V.totalPnl+I.totalPnl;
   const totalPct=((total-1000)/1000*100).toFixed(2);
-  setText('totalPort',`$${total.toFixed(2)}`);
-  setText('totalPnl',`${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)} (${totalPct}%)`);
+  setText('totalPort',`$${parseFloat(total).toFixed(2)}`);
+  setText('totalPnl',`${totalPnl>=0?'+':''}$${parseFloat(totalPnl).toFixed(2)} (${totalPct}%)`);
   const tpEl=document.getElementById('totalPort');if(tpEl) tpEl.style.color=totalPnl>=0?'var(--green)':'var(--red)';
   setText('vPortTop',`$${V.portfolio.toFixed(2)}`);
   setText('vPnlTop',`${V.totalPnl>=0?'+':''}$${V.totalPnl.toFixed(2)}`);
@@ -1599,7 +1599,7 @@ function toggleBoth(){
     // Start live price feeds
     startBinanceWS();
     vLog('[LIVE] Connecting to Binance WebSocket for real crypto prices...', 'ok');
-    vLog('VaultBot started · $500 · 25% position · 6-signal fusion','ok');
+    vLog('VaultBot started · $500 · 35% position · 8-factor · 6/8 threshold','ok');
     vLog('Scanning BTC ETH SOL BNB every 1s · 68% confidence threshold','ok');
     vLog('Signals: EMA+RSI+MACD+Volume+Sentiment+WM Geo · 8-factor scoring','ok');
     iLog('ICT DayTradeBot started · $500 · EUR/USD GBP/USD NAS100 US30','ok');
@@ -1660,7 +1660,7 @@ function renderLog(id,lines){
 // ── HELPERS ───────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
 function setText(id,val){const el=document.getElementById(id);if(el) el.textContent=val;}
-function fmtV(p,pair){return '$'+parseFloat(p).toLocaleString();}
+function fmtV(p,pair){if(!p&&p!==0)return'—';return'$'+parseFloat(p).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtI(p,pair){return parseFloat(p).toFixed(I_DECIMALS[pair]||2);}
 
 // ══════════════════════════════════════════════════════════
@@ -1728,7 +1728,7 @@ function startBinanceWS() {
       if(!msg.data) return;
       const d = msg.data;
       const symbol = d.s; // e.g. BTCUSDT
-      const price = parseFloat(d.c); // current price
+      const price = parseFloat(parseFloat(d.c).toFixed(2)); // current price
       const pairMap = {
         'BTCUSDT':'BTC/USDT','ETHUSDT':'ETH/USDT',
         'SOLUSDT':'SOL/USDT','BNBUSDT':'BNB/USDT'
@@ -1794,18 +1794,50 @@ async function fetchTwelveData() {
   }
 }
 
+function !isWeekend() {
+  // Only fetch during Mon–Fri between 1:00 AM – 12:00 PM EST
+  // Covers London prep (1AM) through NY session close (12PM)
+  const est = new Date(new Date().toLocaleString('en-US', {timeZone:'America/New_York'}));
+  const day = est.getDay(); // 0=Sun, 6=Sat
+  const hour = est.getHours() + est.getMinutes()/60;
+  if(day === 0 || day === 6) return false; // Weekend — no fetching
+  return hour >= 1.0 && hour < 12.0;       // Weekday 1AM–12PM EST only
+}
+
+function getTwelveDataInterval() {
+  // 800 calls/day budget:
+  // Kill zones ~4.5h @ 20s = ~810 calls (full budget on active days)
+  // Outside KZ ~15.5h @ 3min = ~310 calls (keeps data fresh)
+  // Weekend @ 30min = ~48 calls (markets closed)
+  if(isWeekend()) return 30 * 60 * 1000;  // 30 min on weekends
+  const kz = detectKZ();
+  if(kz) return 20 * 1000;               // 20s during kill zones — max resolution
+  return 3 * 60 * 1000;                  // 3 min outside kill zones
+}
+
 function startTwelveData(key) {
   twelveDataKey = key;
-  fetchTwelveData(); // immediate first fetch
-  // Free tier: 800 req/day = 1 req every ~108 seconds
-  // We'll fetch every 60 seconds to stay well within limits
-  twelveDataInterval = setInterval(fetchTwelveData, 60000);
-  iLog('[LIVE] Twelve Data connected — real Forex + Indices prices every 60s', 'ok');
+  // Only fetch immediately if market hours
+  if(!isWeekend()) {
+    fetchTwelveData();
+    iLog('[LIVE] Market hours active — fetching real Forex prices', 'ok');
+  } else {
+    iLog('[LIVE] Twelve Data connected — waiting for market hours (Mon–Fri 1AM–12PM EST)', 'ok');
+  }
+  // Smart adaptive polling
+  // Kill zone: 30s (~240 calls) · Market hours: 3min (~220 calls) · Off hours: 1/hr check only
+  // Total weekday max: ~460 calls — well under 800 limit
+  function scheduleNext() {
+    if(!isWeekend()) fetchTwelveData();
+    twelveDataInterval = setTimeout(scheduleNext, getTwelveDataInterval());
+  }
+  twelveDataInterval = setTimeout(scheduleNext, getTwelveDataInterval());
+  iLog('[LIVE] Polling: 30s during KZ · 3min market hours · paused weekends/off-hours', 'ok');
 }
 
 function stopLiveFeeds() {
   if(binanceWS) { binanceWS.close(); binanceWS = null; }
-  if(twelveDataInterval) { clearInterval(twelveDataInterval); twelveDataInterval = null; }
+  if(twelveDataInterval) { clearTimeout(twelveDataInterval); clearInterval(twelveDataInterval); twelveDataInterval = null; }
 }
 
 
@@ -1813,7 +1845,7 @@ function init(){
   loadKeys();
   // Initial log messages
   vLog('VaultBot initialized · $500 starting capital','ok');
-  vLog('Strategy: 6-signal fusion · EMA+RSI+MACD+Volume+Sentiment+WM','ok');
+  vLog('Strategy: 8-factor · 6/8 threshold · EMA+RSI+MACD+Volume+Sentiment+WM','ok');
   vLog('Position size: 25% · SL: 0.8% · TP: 2.8% · R:R 3.5:1','ok');
   vLog('Threshold: 6/8 signals · 68% confidence · A/A+ only','ok');
   vLog('Press Start Both to begin','');
