@@ -1794,7 +1794,7 @@ async function fetchTwelveData() {
   }
 }
 
-function !isWeekend() {
+function scheduleNext() {
   // Only fetch during Mon–Fri between 1:00 AM – 12:00 PM EST
   // Covers London prep (1AM) through NY session close (12PM)
   const est = new Date(new Date().toLocaleString('en-US', {timeZone:'America/New_York'}));
